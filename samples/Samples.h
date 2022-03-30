@@ -78,6 +78,7 @@ typedef struct {
     BOOL useTestSrc;
     ChannelInfo channelInfo;
     PCHAR pCaCertPath;
+    PCHAR pipelineString;
     PAwsCredentialProvider pCredentialProvider;
     SIGNALING_CLIENT_HANDLE signalingClientHandle;
     PBYTE pAudioFrameBuffer;

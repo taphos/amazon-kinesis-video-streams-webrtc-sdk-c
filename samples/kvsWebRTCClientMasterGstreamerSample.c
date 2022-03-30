@@ -4,7 +4,7 @@
 
 extern PSampleConfiguration gSampleConfiguration;
 
-// #define VERBOSE
+#define VERBOSE
 
 GstFlowReturn on_new_sample(GstElement* sink, gpointer data, UINT64 trackid)
 {
@@ -128,58 +128,7 @@ PVOID sendGstreamerAudioVideo(PVOID args)
         goto CleanUp;
     }
 
-    /**
-     * Use x264enc as its available on mac, pi, ubuntu and windows
-     * mac pipeline fails if resolution is not 720p
-     *
-     * For alaw
-     * audiotestsrc is-live=TRUE ! queue leaky=2 max-size-buffers=400 ! audioconvert ! audioresample !
-     * audio/x-raw, rate=8000, channels=1, format=S16LE, layout=interleaved ! alawenc ! appsink sync=TRUE emit-signals=TRUE name=appsink-audio
-     *
-     * For VP8
-     * videotestsrc is-live=TRUE ! video/x-raw,width=1280,height=720,framerate=30/1 !
-     * vp8enc error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 !
-     * appsink sync=TRUE emit-signals=TRUE name=appsink-video
-     */
-
-    switch (pSampleConfiguration->mediaType) {
-        case SAMPLE_STREAMING_VIDEO_ONLY:
-            if (pSampleConfiguration->useTestSrc) {
-                pipeline = gst_parse_launch(
-                    "videotestsrc is-live=TRUE ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=30/1 ! "
-                    "x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
-                    "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE emit-signals=TRUE name=appsink-video",
-                    &error);
-            } else {
-                pipeline = gst_parse_launch(
-                    "autovideosrc ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=[30/1,10000000/333333] ! "
-                    "x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
-                    "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE emit-signals=TRUE name=appsink-video",
-                    &error);
-            }
-            break;
-
-        case SAMPLE_STREAMING_AUDIO_VIDEO:
-            if (pSampleConfiguration->useTestSrc) {
-                pipeline = gst_parse_launch("videotestsrc is-live=TRUE ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=30/1 ! "
-                                            "x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
-                                            "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE "
-                                            "emit-signals=TRUE name=appsink-video audiotestsrc is-live=TRUE ! "
-                                            "queue leaky=2 max-size-buffers=400 ! audioconvert ! audioresample ! opusenc ! "
-                                            "audio/x-opus,rate=48000,channels=2 ! appsink sync=TRUE emit-signals=TRUE name=appsink-audio",
-                                            &error);
-            } else {
-                pipeline =
-                    gst_parse_launch("autovideosrc ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=[30/1,10000000/333333] ! "
-                                     "x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
-                                     "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE emit-signals=TRUE "
-                                     "name=appsink-video autoaudiosrc ! "
-                                     "queue leaky=2 max-size-buffers=400 ! audioconvert ! audioresample ! opusenc ! "
-                                     "audio/x-opus,rate=48000,channels=2 ! appsink sync=TRUE emit-signals=TRUE name=appsink-audio",
-                                     &error);
-            }
-            break;
-    }
+    pipeline = gst_parse_launch(pSampleConfiguration->pipelineString, &error);
 
     if (pipeline == NULL) {
         printf("[KVS GStreamer Master] sendGstreamerAudioVideo(): Failed to launch gstreamer, operation returned status code: 0x%08x \n",
@@ -380,33 +329,7 @@ INT32 main(INT32 argc, CHAR* argv[])
     printf("[KVS Gstreamer Master] Finished initializing GStreamer\n");
 
     if (argc > 2) {
-        if (STRCMP(argv[2], "video-only") == 0) {
-            pSampleConfiguration->mediaType = SAMPLE_STREAMING_VIDEO_ONLY;
-            printf("[KVS Gstreamer Master] Streaming video only\n");
-        } else if (STRCMP(argv[2], "audio-video") == 0) {
-            pSampleConfiguration->mediaType = SAMPLE_STREAMING_AUDIO_VIDEO;
-            printf("[KVS Gstreamer Master] Streaming audio and video\n");
-        } else {
-            printf("[KVS Gstreamer Master] Unrecognized streaming type. Default to video-only\n");
-        }
-    } else {
-        printf("[KVS Gstreamer Master] Streaming video only\n");
-    }
-
-    if (argc > 3) {
-        if (STRCMP(argv[3], "testsrc") == 0) {
-            printf("[KVS GStreamer Master] Using test source in GStreamer\n");
-            pSampleConfiguration->useTestSrc = TRUE;
-        }
-    }
-
-    switch (pSampleConfiguration->mediaType) {
-        case SAMPLE_STREAMING_VIDEO_ONLY:
-            printf("[KVS GStreamer Master] streaming type video-only");
-            break;
-        case SAMPLE_STREAMING_AUDIO_VIDEO:
-            printf("[KVS GStreamer Master] streaming type audio-video");
-            break;
+        pSampleConfiguration->pipelineString = argv[2];
     }
 
     // Initalize KVS WebRTC. This must be done before anything else, and must only be done once.
